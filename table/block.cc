@@ -140,7 +140,10 @@ class Block::Iter : public Iterator {
     assert(Valid());
     ParseNextKey();
   }
-
+  virtual uint64_t seqNum() {
+          assert(valid_);
+          return 0;
+      }
   virtual void Prev() {
     assert(Valid());
 

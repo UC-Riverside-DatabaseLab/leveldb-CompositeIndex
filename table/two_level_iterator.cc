@@ -30,7 +30,10 @@ class TwoLevelIterator: public Iterator {
   virtual void SeekToLast();
   virtual void Next();
   virtual void Prev();
-
+  virtual uint64_t seqNum() {
+          assert(valid_);
+          return 0;
+      }
   virtual bool Valid() const {
     return data_iter_.Valid();
   }

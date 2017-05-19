@@ -18,7 +18,7 @@ using namespace std;
 //NYTweetsUserIDRangerw19
 //Small-CreationTime-Write-Range3
 static string database = "/home/mohiuddin/Desktop/LevelDB_Correctness_Testing/DB/Embedded_Write_UserID_Sec100_K5";
-static string benchmark_file = "/home/mohiuddin/Desktop/LevelDB_Correctness_Testing/Benchmarks/Small-CreationTime-Write-Range3";
+static string benchmark_file = "/home/mohiuddin/Desktop/LevelDB_Correctness_Testing/Benchmarks/NYTweetsUserIDRangerw19";
 static string result_file = "/home/mohiuddin/Desktop/LevelDB_Correctness_Testing/Results/Lazy_Write_UserID_Sec100_K5.csv";
 
 //static int numberofiterations = 2;
@@ -54,8 +54,8 @@ void testWithBenchMark()
 
     options.filter_policy = leveldb::NewBloomFilterPolicy(bloomfilter);
     options.primary_key = "ID";
-    //options.secondary_key = "UserID";
-    options.secondary_key = "CreationTime";
+    options.secondary_key = "UserID";
+    //options.secondary_key = "CreationTime";
     //options.secondaryAtt = "Hashtags";
 
     options.create_if_missing = true;
@@ -69,7 +69,7 @@ void testWithBenchMark()
     assert(status.ok());
 
     ifstream ifile(benchmark_file.c_str());
-    vector<leveldb::KeyValuePair> svalues;
+    vector<leveldb::RangeKeyValuePair> svalues;
     vector<leveldb::RangeKeyValuePair> srangevalues;
     if (!ifile) { cerr << "Can't open input file " << endl; return; }
     string line;

@@ -31,7 +31,10 @@ class MergingIterator : public Iterator {
   virtual bool Valid() const {
     return (current_ != NULL);
   }
-
+  virtual uint64_t seqNum() {
+          assert(valid_);
+          return 0;
+      }
   virtual void SeekToFirst() {
     for (int i = 0; i < n_; i++) {
       children_[i].SeekToFirst();

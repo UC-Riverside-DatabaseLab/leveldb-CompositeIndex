@@ -62,6 +62,21 @@ class Slice {
     size_ -= n;
   }
 
+  void get_subslice(size_t pos, size_t n, Slice &s) {
+	  s = Slice(data_+pos, n);
+  }
+
+
+  int find(char s) {
+
+	  for(size_t i =0 ; i<size_; i++)
+	  {
+		  if(data_[i]==s)
+			  return i;
+	  }
+	  return -1;
+
+  }
   // Return a string that contains the copy of the referenced data.
   std::string ToString() const { return std::string(data_, size_); }
 

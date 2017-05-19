@@ -96,12 +96,10 @@ class DB {
   DB() { }
   virtual ~DB();
 
-  // **** added 2014/02/28 - abhinand menon
-  // Overloaded interface:
   virtual Status Put(const WriteOptions& options,
                      const Slice& value) = 0;
   virtual Status Get(const ReadOptions& options,
-                     const Slice& skey, std::vector<KeyValuePair>* value_list) = 0;
+                     const Slice& skey, std::vector<RangeKeyValuePair>* value_list) = 0;
 
   virtual Status RangeLookUp(const ReadOptions& options,
                    const Slice& startSkey, const Slice& endSkey,

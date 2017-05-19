@@ -47,7 +47,7 @@ class DBImpl : public DB {
   virtual Status Put(const WriteOptions& options,
                      const Slice& value);
   virtual Status Get(const ReadOptions& options,
-                     const Slice& key, std::vector<KeyValuePair>* value_list);
+                     const Slice& key, std::vector<RangeKeyValuePair>* value_list);
 
   virtual Status RangeLookUp(const ReadOptions& options,
                    const Slice& startSkey, const Slice& endSkey,

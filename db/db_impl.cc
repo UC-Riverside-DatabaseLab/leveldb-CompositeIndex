@@ -1330,142 +1330,24 @@ Status DBImpl::Delete(const WriteOptions& options, const Slice& key) {
 }
 
 
-// **** added 2014/05/30 - abhinand menon
-// Overloaded interface:
 Status DBImpl::Put(const WriteOptions& options, const Slice& value) {
-  // parse value into json object
-  //std::ofstream outputFile;
-  //outputFile.open("/home/mohiuddin/Desktop/TestDB/debug3.txt");//,std::ofstream::out | std::ofstream::app);
-    
-  //outputFile<<value.ToString()<<std::endl;
-  //outputFile<<"s";
+
   rapidjson::Document json_val;
   std::string tempval =  value.ToString();
   json_val.Parse<0>(tempval.c_str());
-  //outputFile<<"-0";  
   // extract out primary and secondary keys
   std::string pkey = GetAttr(json_val, this->options_.primary_key.c_str());
-  //std::cout<<pkey<<std::endl;
-  //outputFile<<"-1";  
   std::string skey = GetAttr(json_val, this->options_.secondary_key.c_str());
-  //outputFile<<"-2";
-  // check if the secondary key already exists in the secondary index db
-  std::string pkey_list;
-  Status rstatus = this->sdb->Get(ReadOptions(), skey, &pkey_list);
- // outputFile<<"-3";
-  // define variables for writing into secondary db
-  rapidjson::StringBuffer strbuf;
-  rapidjson::Writer<rapidjson::StringBuffer> writer(strbuf);
+
+  std::string secindexkey = skey+"+"+pkey;
+  //std::string secindexvalue = SSTR(s);
+  Slice secindexvalue = Slice();
+
   Status sdb_status;
-  //outputFile<<"-4";
-  // entry for secondary key already exists in the secondary index db
-  SequenceNumber s = versions_->LastSequence()+1;
-  if (rstatus.ok()&&!rstatus.IsNotFound()) {
-      
-   // outputFile<<"1";  
-    rapidjson::Document key_list;
-    key_list.Parse<0>(pkey_list.c_str());
-    //outputFile<<pkey_list<<std::endl;
-    
-    int old_pkey = -1;
-    for (rapidjson::SizeType i = 0; i < key_list.Size(); i++) {
-    	//std::cout<<key_list[i]<<std::endl;
-    	std::string pkeyold = GetVal(key_list[i]);
-    	std::string delim = "+";
-		std::size_t found = pkeyold.find(delim);
+ // SequenceNumber s = versions_->LastSequence()+1;
 
-		if (found!=std::string::npos)
-			pkeyold = pkeyold.substr(found+1);
-
-	    if (pkeyold == pkey)
-		{
-			old_pkey = (int)i;
-			break;
-		}
-    }
-
-    //pkey = SSTR(s)+"+"+pkey;
-
-    //std::cout<<pkey<<std::endl;
-    // an existing primary key is being overwritten
-    if (old_pkey>=0) {
-        //outputFile<<"2"; 
-      std::string new_key_list = "[";
-      rapidjson::SizeType j = 0;
-
-      // copy into new key list and remove old primary key, maintain (write) order of keys
-      int len = key_list.Size();
-      for (int i = 0; i < len; i++)
-      {
-        if (i!=old_pkey) {
-          if (j != 0)
-            new_key_list += ",";
-          new_key_list += ("\"" + GetVal(key_list[i]) + "\"");
-          j++;
-        }
-      }
-	if(new_key_list.size()>0)
-		new_key_list += (",\"" + SSTR(s)+"+"+pkey + "\"]");
-	else
-		new_key_list += ("\"" + SSTR(s)+"+"+pkey + "\"]");
-
-      sdb_status = this->sdb->Put(options, skey, new_key_list);
-    }
-     
-    // a new primary key is being added
-    else {
-    
-      //outputFile<<"3"; 
-      
-      //key_list.PushBack(pkey.c_str(), key_list.GetAllocator());
-      //key_list.Accept(writer);
-   
-
-      std::string new_key_list = "[";
-      rapidjson::SizeType j = 0;
-
-      // copy into new key list and remove old primary key, maintain (write) order of keys
-      for (rapidjson::SizeType i = 0; i < key_list.Size(); i++)
-      {
-         
-          if (j != 0)
-            new_key_list += ",";
-          new_key_list += ("\"" + GetVal(key_list[i]) + "\"");
-          j++;
-        
-
-        
-      }
-      
-       if(new_key_list.size()>0)
-        new_key_list += (",\"" + SSTR(s)+"+"+pkey + "\"]");
-    else
-        new_key_list += ("\"" + SSTR(s)+"+"+pkey + "\"]");
-      // write list into secondary index db
-      //sdb_status = this->sdb->Put(options, skey, strbuf.GetString());
-      sdb_status = this->sdb->Put(options, skey, new_key_list);
-    }
-    
-  }
-  // entry for secondary key doesn't exist in the secondary index db
-  else if (rstatus.IsNotFound()) {
-
-	//pkey = SSTR(s)+"+"+pkey;
-	//std::cout<<pkey<<std::endl;
-	//outputFile<<"4"<<pkey<<std::endl;
-	  std::string pkeynew = SSTR(s)+"+"+pkey;
-	  //std::cout<<pkeynew<<std::endl;
-    rapidjson::Value key_list(rapidjson::kArrayType);
-    key_list.PushBack(pkeynew.c_str(), rapidjson::Document().GetAllocator());
-    key_list.Accept(writer);
-
-    // write list into secondary index db
-    sdb_status = this->sdb->Put(options, skey, strbuf.GetString());
-  }
-  // error with read
-  else return rstatus;
-
-  //outputFile<<"5"; 
+  //std::cout<<"write: "<< secindexkey<<std::endl;
+  sdb_status = this->sdb->Put(options, secindexkey, secindexvalue);
 
   // remove primary key from json object and write value into primary db
   json_val.RemoveMember(this->options_.primary_key.c_str());
@@ -1483,199 +1365,202 @@ Status DBImpl::Put(const WriteOptions& options, const Slice& value) {
 Status DBImpl::RangeLookUp(const ReadOptions& options,
                  const Slice& startSkey, const Slice& endSkey,
                  std::vector<RangeKeyValuePair>* value_list)
+
 {
 	Status s;
+	std::string pkeys;
 	Iterator* it = this->sdb->NewIterator( leveldb::ReadOptions());
 	std::unordered_set<std::string> resultSetofKeysFound;
 	int topk = options.num_records;
+
 	for (it->Seek(startSkey); it->Valid(); it->Next())
 	{
 
 		leveldb::Slice key = it->key();
-		std::string seckey = key.ToString();
+
+		//leveldb::Slice seq = it->value();
+		uint64_t seqN =it->seqNum();
+		//std::cout<<key.ToString()<<std::endl;
+
+		//std::string seckey = key.ToString();
 		//outputFile<<key.ToString()<<"\n";
-		if( seckey.compare(endSkey.ToString()) > 0)
+
+		//std::cout<<key.ToString() <<", seq = " << seqN<<std::endl;
+
+		Slice seckey , pkey;
+
+		//continue;
+
+		//std::string delim = "+";
+		char delim = '+';
+		std::size_t found = key.find(delim);
+
+		if (found!=-1)
 		{
-		// key > end
-			break;
+			 key.get_subslice(0, found, seckey);
+			 key.get_subslice(found+1, key.size()-found-1, pkey);
 
-		}
-		else
-		{
-			/**
-			* process (key, value)
-			*/
-			Slice v = it->value();
-			std::string val;
-			val.assign(v.data(), v.size());
+			 //std::cout<<seckey.ToString() <<"->" << pkey.ToString()<<std::endl;
 
-			rapidjson::Document key_list;
+			 //continue;
+			 if(seckey.compare(endSkey)>0)
+			 {
+				 break;
+			 }
+				 //cout<<"Valid sec key found\n";
+			 else
+			 {
+				struct RangeKeyValuePair newVal;;
+				pkeys= pkey.ToString();
+				newVal.key = pkeys;
+				newVal.sequence_number = seqN;
+				int vsize = value_list->size();
+				if(vsize>=topk && seqN<value_list->front().sequence_number)
+										continue;
 
-			key_list.Parse<0>(val.c_str());
-			rapidjson::SizeType len = key_list.Size();
-			//std::cout<<len<<std::endl;
-			unsigned i = 0;
-
-			while (i < len )
-			{
-
-				std::string pkey = GetVal(key_list[i]);
-				//std::cout<<pkey<<std::endl;
-				//continue;
-				i++;
-				//Add in result set
-				std::string pValue;
-				std::string delim = "+";
-				std::size_t found = pkey.find(delim);
-
-				if (found!=std::string::npos)
+				if(resultSetofKeysFound.find(pkeys)==resultSetofKeysFound.end())
 				{
-					char *pEnd;
-					uint64_t seqN =   std::strtoul(pkey.substr(0, found).c_str(), &pEnd, 0);
-					pkey = pkey.substr(found+1);
+					 std::string pValue;
+					 Status db_status = this->Get(options, pkey, &pValue);
+					 if (db_status.ok()) {
+						rapidjson::Document val;
+						val.Parse<0>(pValue.c_str());
+
+						// check for updates
+						if (seckey.ToString() == GetAttr(val, this->options_.secondary_key.c_str())) {
+							if(vsize>=topk)
+								newVal.Pop(value_list);
+							newVal.Push(value_list, newVal);
+							resultSetofKeysFound.insert(pkeys);
+
+						}
+						// trigger read repair as this pkey has a updated skey
+						else
+						{
+						  //updated = true;
+							WriteOptions wopt;
+							this->sdb->Delete(wopt, key);
+						}
+					 }
+					 else if(db_status.IsNotFound())
+					 {
+						 //read repair, delete entry pkey from sec table
+						 WriteOptions wopt;
+						 this->sdb->Delete(wopt, key);
+					 }
+				}
+			 }
+		}
+
+
+
+
+	}
+
+	delete it;
+	return s;
+}
+
+Status DBImpl::Get(const ReadOptions& options, const Slice& skey, std::vector<RangeKeyValuePair>* value_list)
+{
+	Status s;
+	std::string pkeys;
+	Iterator* it = this->sdb->NewIterator( leveldb::ReadOptions());
+	std::unordered_set<std::string> resultSetofKeysFound;
+	int topk = options.num_records;
+	//std::cout<< "Lookup: "<<skey.ToString()<<std::endl;
+	for (it->Seek(skey); it->Valid(); it->Next())
+	{
+
+		leveldb::Slice key = it->key();
+		//leveldb::Slice seq = it->value();
+		SequenceNumber seqN =it->seqNum();
+		//std::string seckey = key.ToString();
+		//outputFile<<key.ToString()<<"\n";
+		//std::cout<<key.ToString() <<", seq = " << seqN<<std::endl;
+		Slice seckey , pkey;
+		if( key.starts_with( skey ) == true)
+		{
+			//std::string delim = "+";
+			char delim = '+';
+			std::size_t found = key.find(delim);
+
+			//std::cout<<"Starts With"<<std::endl;
+
+			//continue;
+
+
+			if (found!=-1)
+			{
+				 key.get_subslice(0, found, seckey);
+				 key.get_subslice(found+1, key.size()-found-1, pkey);
+
+				 //std::cout<<seckey.ToString() <<"->" << pkey.ToString()<<std::endl;
+				 //continue;
+				 if(seckey.compare(skey)==0)
+				 {
+
 					struct RangeKeyValuePair newVal;;
 
-					newVal.key = pkey;
+					pkeys= pkey.ToString();
+					newVal.key = pkeys;
 					newVal.sequence_number = seqN;
 					int vsize = value_list->size();
 					if(vsize>=topk && seqN<value_list->front().sequence_number)
-						continue;
+					 						continue;
 
-					if(resultSetofKeysFound.find(pkey)==resultSetofKeysFound.end())
+					if(resultSetofKeysFound.find(pkeys)==resultSetofKeysFound.end())
 					{
+						//std::cout<<pkey.ToString()<<"\n";
 
-						Status db_status = this->Get(options, pkey, &pValue);
-						newVal.value = pValue;
-						// if there are no errors, push KV pair onto return vector, latest record first
-						// check for updated values
-						if (db_status.ok()&&!db_status.IsNotFound()) {
-							rapidjson::Document temp_val;
-							temp_val.Parse<0>(pValue.c_str());
-							//outputFile<<pkey<<" -> "<<pValue<<"\n"<<skey.ToString()<<" == "<< GetAttr(temp_val, this->options_.secondary_key.c_str())<<"\n";
-							if (seckey == GetAttr(temp_val, this->options_.secondary_key.c_str()))
+						 std::string pValue;
+						 Status db_status = this->Get(options, pkey, &pValue);
+						 if (db_status.ok()) {
+							rapidjson::Document val;
+							val.Parse<0>(pValue.c_str());
+
+							// check for updates
+							if (skey.ToString() == GetAttr(val, this->options_.secondary_key.c_str()))
 							{
 								if(vsize>=topk)
 									newVal.Pop(value_list);
 								newVal.Push(value_list, newVal);
-								resultSetofKeysFound.insert(pkey);
+								resultSetofKeysFound.insert(pkeys);
+								//s= Slice::OK();
+								//std::cout<<"inserted"<<std::endl;
 
 							}
-						}
+							// trigger read repair as this pkey has a updated skey
+							else
+							{
+							  //updated = true;
+								WriteOptions wopt;
+								this->sdb->Delete(wopt, key);
+								//std::cout<<"updated"<<std::endl;
+							}
+						 }
+						 else if(db_status.IsNotFound())
+						 {
+							 //read repair, delete entry pkey from sec table
+							 WriteOptions wopt;
+							 this->sdb->Delete(wopt, key);
+							 //std::cout<<"not found"<<std::endl;
+						 }
 					}
-				}
-
-
-
+				 }
 			}
+
 		}
+		else
+		{
+			break;
+		}
+
 	}
+
 	delete it;
-	//std::sort_heap(value_list->begin(),value_list->end(),NewestFirst);
-	    return s;
-
+	return s;
 }
-
-
-// **** added 2014/05/30 - abhinand menon
-// Overloaded interface:
-Status DBImpl::Get(const ReadOptions& options, const Slice& skey, std::vector<KeyValuePair>* value_list) {
-  std::string pkey_list;
-  Status rstatus = this->sdb->Get(ReadOptions(), skey, &pkey_list);
-
-  // proceed if secondary key exists and there are no errors
-  if (rstatus.ok()) {
-    int num_records = options.num_records;
-    bool updated = false;
-    std::string new_key_list = "[";
-    int j = 0;
-
-    rapidjson::Document key_list;
-    key_list.Parse<0>(pkey_list.c_str());
-
-    rapidjson::SizeType i = key_list.Size() - 1;
-
-    // read requested number of records from primary db
-    while (num_records > 0 and (int)i >= 0) {
-      std::string fullpkey = GetVal(key_list[i]);
-      //std::string value;
-      std::string pValue;
-
-	  std::string delim = "+";
-	  std::size_t found = fullpkey.find(delim);
-
-	  std::string pkey;
-
-	  if (found!=std::string::npos)
-	  {
-
-		  char *pEnd;
-		  uint64_t seqN =   std::strtoul(fullpkey.substr(0, found).c_str(), &pEnd, 0);
-		  pkey = fullpkey.substr(found+1);
-
-		  Status db_status = this->Get(options, pkey, &pValue);
-
-		  // if there are no errors, push KV pair onto return vector, latest record first
-		  // check for updated values
-		  if (db_status.ok()) {
-			rapidjson::Document val;
-			val.Parse<0>(pValue.c_str());
-
-			// check for updates
-			if (skey.ToString() == GetAttr(val, this->options_.secondary_key.c_str())) {
-			  value_list->push_back(KeyValuePair(pkey, pValue));
-
-			  //new_key_list.PushBack(pkey.c_str(), rapidjson::Document().GetAllocator());
-			  if (j != 0)
-				new_key_list += ",";
-			  new_key_list += ("\"" + fullpkey + "\"");
-			  j++;
-			}
-			// trigger read repair
-			else
-			  updated = true;
-		  }
-		  // trigger read repair
-		  else if (db_status.IsNotFound())
-			updated = true;
-		  // return any errors
-		  else
-			return db_status;
-
-		  num_records--;
-	  }
-      i--;
-
-    }
-
-    // perform read repair
-    if (false) {
-      // copy any unread primary keys into new list
-      while ((int)i >= 0) {
-        if (j != 0)
-          new_key_list += ",";
-        new_key_list += ("\"" + GetVal(key_list[i]) + "\"");
-        j++;
-        i--;
-      }
-
-      new_key_list += "]";
-
-      // write list into secondary index db
-      Status sdb_status;
-      if (new_key_list != "[]")
-        sdb_status = this->sdb->Put(WriteOptions(), skey, new_key_list);
-      else
-        sdb_status = this->sdb->Delete(WriteOptions(), skey);
-
-      if (!sdb_status.ok())
-        return sdb_status;
-    }
-  }
-
-  // return read status
-  return rstatus;
-}
-
 
 //*******************************************************************************************
 //

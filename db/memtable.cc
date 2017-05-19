@@ -63,7 +63,10 @@ class MemTableIterator: public Iterator {
     Slice key_slice = GetLengthPrefixedSlice(iter_.key());
     return GetLengthPrefixedSlice(key_slice.data() + key_slice.size());
   }
-
+  virtual uint64_t seqNum() {
+          assert(valid_);
+          return 0;
+      }
   virtual Status status() const { return Status::OK(); }
 
  private:

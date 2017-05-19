@@ -67,7 +67,10 @@ class DBIter: public Iterator {
     assert(valid_);
     return (direction_ == kForward) ? ExtractUserKey(iter_->key()) : saved_key_;
   }
-  virtual Slice value() const {
+
+
+
+    virtual Slice value() const {
     assert(valid_);
     return (direction_ == kForward) ? iter_->value() : saved_value_;
   }
@@ -78,7 +81,7 @@ class DBIter: public Iterator {
       return status_;
     }
   }
-
+  virtual uint64_t seqNum() ;
   virtual void Next();
   virtual void Prev();
   virtual void Seek(const Slice& target);
@@ -142,7 +145,14 @@ inline bool DBIter::ParseKey(ParsedInternalKey* ikey) {
     return true;
   }
 }
+uint64_t DBIter::seqNum() {
+      assert(valid_);
 
+      ParsedInternalKey ikey;
+      ParseKey(&ikey);
+      return ikey.sequence;
+
+  }
 void DBIter::Next() {
   assert(valid_);
 

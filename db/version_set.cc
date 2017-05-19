@@ -195,6 +195,12 @@ class Version::LevelFileNumIterator : public Iterator {
       index_--;
     }
   }
+  virtual uint64_t seqNum() {
+        assert(valid_);
+
+        return 0;
+
+    }
   Slice key() const {
     assert(Valid());
     return (*flist_)[index_]->largest.Encode();
