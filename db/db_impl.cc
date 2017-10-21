@@ -1481,6 +1481,8 @@ Status DBImpl::Get(const ReadOptions& options, const Slice& skey, std::vector<Ra
 		Slice seckey , pkey;
 		if( key.starts_with( skey ) == true)
 		{
+
+
 			//std::string delim = "+";
 			char delim = '+';
 			std::size_t found = key.find(delim);
@@ -1509,12 +1511,16 @@ Status DBImpl::Get(const ReadOptions& options, const Slice& skey, std::vector<Ra
 					if(vsize>=topk && seqN<value_list->front().sequence_number)
 					 						continue;
 
+
+
 					if(resultSetofKeysFound.find(pkeys)==resultSetofKeysFound.end())
 					{
 						//std::cout<<pkey.ToString()<<"\n";
 
 						 std::string pValue;
+						 //continue;
 						 Status db_status = this->Get(options, pkey, &pValue);
+
 						 if (db_status.ok()) {
 							rapidjson::Document val;
 							val.Parse<0>(pValue.c_str());
@@ -1549,6 +1555,8 @@ Status DBImpl::Get(const ReadOptions& options, const Slice& skey, std::vector<Ra
 					}
 				 }
 			}
+			else
+				break;
 
 		}
 		else
@@ -1702,7 +1710,7 @@ Status DBImpl::MakeRoomForWrite(bool force) {
       mutex_.Unlock();
       env_->SleepForMicroseconds(1000);
       allow_delay = false;  // Do not delay a single write more than once
-      mutex_.Lock();
+      mutex_.Lock() ;
     } else if (!force &&
                (mem_->ApproximateMemoryUsage() <= options_.write_buffer_size)) {
       // There is room in current memtable
@@ -1880,6 +1888,11 @@ Status DB::Open(const Options& options, const std::string& dbname,
     Options soption;
     soption.create_if_missing = true;
     soption.using_s_index = false;
+
+    soption.filter_policy = leveldb::NewBloomFilterPolicy(100);
+    soption.max_open_files = 15000;
+    soption.block_cache = leveldb::NewLRUCache(100 * 1048576);  // 100MB cache
+
     Status sstatus = DB::Open(soption, sdbname, &impl->sdb);
 
     // return any errors, secondary db errors first

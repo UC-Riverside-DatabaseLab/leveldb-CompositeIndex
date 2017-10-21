@@ -3,12 +3,12 @@
 // found in the LICENSE file. See the AUTHORS file for names of contributors.
 
 #include "table/format.h"
-
 #include "leveldb/env.h"
 #include "port/port.h"
 #include "table/block.h"
 #include "util/coding.h"
 #include "util/crc32c.h"
+#include "leveldb/table.h"
 
 namespace leveldb {
 
@@ -108,6 +108,18 @@ Status ReadBlock(RandomAccessFile* file,
         result->data = Slice(data, n);
         result->heap_allocated = false;
         result->cachable = false;  // Do not double-cache
+
+        if(options.type == ReadType::Write)
+			w_iostat.cachehit++;
+		else if(options.type == ReadType::PRead)
+			pr_iostat.cachehit++;
+		else if(options.type == ReadType::SRead)
+			sr_iostat.cachehit++;
+		else if(options.type == ReadType::SRRead)
+			sr_range_iostat.cachehit++;
+
+
+
       } else {
         result->data = Slice(buf, n);
         result->heap_allocated = true;
